@@ -1,0 +1,28 @@
+<resources>
+    <!-- App name and basics -->
+    <string name="app_name">Дні для стрижки</string>
+
+    <!-- UI elements -->
+    <string name="select_date">Оберіть дату</string>
+    <string name="favorable_day">Позитивний день для стрижки</string>
+    <string name="unfavorable_day">Негативний день для стрижки</string>
+    <string name="neutral_day">Нейтральний день</string>
+    <string name="phase">Фаза</string>
+    <string name="waxing">Зростаючий</string>
+    <string name="waning">Згасаючий</string>
+    <string name="yes">Так</string>
+    <string name="no">Ні</string>
+    <string name="lunar_day">Місячний день</string>
+    <string name="zodiac_sign">Знак зодіаку</string>
+    <string name="status">Статус</string>
+    <string name="reminders">Нагадування про сприятливі дні</string>
+    <string name="notification_title">Сьогодні сприятливий день для стрижки!</string>
+    <string name="notification_text">Дата: %1$s – Місяць у гарному положенні</string>
+
+    <!-- Buttons / switches -->
+    <string name="enable_reminders">Увімкнути нагадування</string>
+
+    <!-- Messages -->
+    <string name="data_not_loaded">Дані не завантажено для %1$s</string>
+    <string name="loading">Завантаження...</string>
+</resources>

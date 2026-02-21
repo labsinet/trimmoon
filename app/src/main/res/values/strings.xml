@@ -1,0 +1,28 @@
+<resources>
+    <!-- App name and basics -->
+    <string name="app_name">Haircut Days</string>
+
+    <!-- UI elements -->
+    <string name="select_date">Select a date</string>
+    <string name="favorable_day">Favorable day for haircut</string>
+    <string name="unfavorable_day">Unfavorable day for haircut</string>
+    <string name="neutral_day">Neutral day</string>
+    <string name="phase">Phase</string>
+    <string name="waxing">Waxing</string>
+    <string name="waning">Waning</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="lunar_day">Lunar day</string>
+    <string name="zodiac_sign">Zodiac sign</string>
+    <string name="status">Status</string>
+    <string name="reminders">Reminders for favorable days</string>
+    <string name="notification_title">Favorable day for haircut today!</string>
+    <string name="notification_text">Date: %1$s – Moon is in a good position</string>
+
+    <!-- Buttons / switches -->
+    <string name="enable_reminders">Enable reminders</string>
+
+    <!-- Messages -->
+    <string name="data_not_loaded">Data not loaded for %1$s</string>
+    <string name="loading">Loading...</string>
+</resources>
