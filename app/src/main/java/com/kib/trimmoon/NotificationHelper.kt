@@ -1,10 +1,13 @@
-package com.example.haircutapp
+package com.kib.trimmoon
 
+import android.Manifest
+import android.R
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -36,7 +39,7 @@ object NotificationHelper {
         )
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_menu_today) // заміни на свій іконку
+            .setSmallIcon(R.drawable.ic_menu_today) // заміни на свій іконку
             .setContentTitle("Сьогодні сприятливий день для стрижки!")
             .setContentText("Дата: $dateStr – Місяць у гарному положенні")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -47,8 +50,8 @@ object NotificationHelper {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 if (checkSelfPermission(
                         context,
-                        android.Manifest.permission.POST_NOTIFICATIONS
-                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        Manifest.permission.POST_NOTIFICATIONS
+                    ) == PackageManager.PERMISSION_GRANTED
                 ) {
                     notify(NOTIFICATION_ID, builder.build())
                 }

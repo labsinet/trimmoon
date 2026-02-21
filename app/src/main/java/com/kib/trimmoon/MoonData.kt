@@ -1,3 +1,5 @@
+package com.kib.trimmoon
+
 // MoonData.kt (Модель даних з API, адаптувати за потребою)
 data class MoonData(
     val phase_name: String,

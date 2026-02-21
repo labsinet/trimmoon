@@ -1,3 +1,7 @@
+package com.kib.trimmoon
+
+import MoonApiService
+import MoonDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.Retrofit
@@ -96,20 +100,5 @@ class DataLoader(private val dao: MoonDao) {
     }
 }
 
-// Decorators for MaterialCalendarView
-import com.prolificinteractive.materialcalendarview.CalendarDay
-import com.prolificinteractive.materialcalendarview.DayViewDecorator
-import com.prolificinteractive.materialcalendarview.DayViewFacade
-import android.graphics.Color
-import android.graphics.drawable.Drawable
-import android.graphics.drawable.ShapeDrawable
-import android.graphics.drawable.shapes.OvalShape
 
-class DayDecorator(private val dates: Set<CalendarDay>, private val color: Int) : DayViewDecorator {
-    override fun shouldDecorate(day: CalendarDay): Boolean = dates.contains(day)
-    override fun decorate(view: DayViewFacade) {
-        val drawable = ShapeDrawable(OvalShape())
-        drawable.paint.color = color
-        view.addSpan(DayViewFacade.Spans.BackgroundSpan(drawable))
-    }
-}
+

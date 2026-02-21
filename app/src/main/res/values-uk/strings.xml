@@ -25,4 +25,5 @@
     <!-- Messages -->
     <string name="data_not_loaded">Дані не завантажено для %1$s</string>
     <string name="loading">Завантаження...</string>
+
 </resources>

@@ -1,13 +1,17 @@
-package com.kib.trimmoon  // must match your namespace/applicationId
+package com.kib.trimmoon
 
+import MoonDao
+import android.content.Context
 import androidx.room.Database
+import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [MoonInfo::class],  // ← list ALL your @Entity classes here!
+    entities = [MoonInfo::class],
     version = 1,
-    exportSchema = false           // set true later if you want schema checks
+    exportSchema = true  // Змініть на true для генерації схеми (дивіться в schemas папці після білду)
 )
+// @TypeConverters(Converters::class)  // Додайте, якщо створите Converters.kt для Double/Boolean тощо (хоча Room їх підтримує)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun moonDao(): MoonDao
 
@@ -20,7 +24,7 @@ abstract class AppDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "haircut-db"  // or "trimmoon-db"
+                    "trimmoon-db"  // Змініть на "trimmoon-db" для консистентності
                 ).build()
                 INSTANCE = instance
                 instance

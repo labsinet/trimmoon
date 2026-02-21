@@ -9,12 +9,12 @@ ksp {
 }
 
 android {
-    namespace = "com.example.trimmoon"
+    namespace = "com.kib.trimmoon"
     // Зверніть увагу: SDK 36 ще в стадії Preview, краще використовувати 34 або 35, якщо немає специфічної потреби
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.trimmoon"
+        applicationId = "com.kib.trimmoon"
         minSdk = 29
         targetSdk = 35
         versionCode = 1
@@ -46,6 +46,7 @@ android {
     }
 
 
+
 }
 
 dependencies {
@@ -55,7 +56,7 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
     // Room
-    val roomVersion = "2.6.1"
+    val roomVersion = "2.7.0"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
@@ -67,5 +68,5 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     //implementation(libs.material.calendarview)
-    implementation("com.github.prolificinteractive:material-calendarview:201")
+    implementation("com.github.prolificinteractive:material-calendarview:2.0.1")
  }

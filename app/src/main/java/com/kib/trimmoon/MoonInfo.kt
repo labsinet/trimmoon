@@ -1,3 +1,5 @@
+package com.kib.trimmoon
+
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 

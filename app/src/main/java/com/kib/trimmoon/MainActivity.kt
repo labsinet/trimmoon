@@ -33,7 +33,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var monthSpinner: Spinner
     private lateinit var switchReminders: SwitchCompat
 
-    private val apiKey = "YOUR_RAPIDAPI_KEY_HERE" // ← замініть на реальний ключ!
+    private val apiKey = "2d967e36b1msh5d742f0a8321108p1ab395jsnd2ffa9f34d4" // ← замініть на реальний ключ!
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
