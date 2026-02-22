@@ -63,6 +63,8 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
-    //implementation(libs.material.calendarview)
-    // implementation("com.kizitonwose.calendar:view:2.4.0")
- }
+    // Calendar decorators for coloring days
+    implementation("com.github.prolificinteractive:material-calendarview:2.0.1") {
+        exclude(group = "com.android.support")
+    }
+}

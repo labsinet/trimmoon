@@ -23,7 +23,7 @@
         app:layout_constraintStart_toEndOf="@id/yearSpinner"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <CalendarView
+    <com.prolificinteractive.materialcalendarview.MaterialCalendarView
         android:id="@+id/calendarView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

@@ -2,24 +2,28 @@ package com.kib.trimmoon
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
-import android.widget.CalendarView
-import android.widget.Spinner
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
+import com.prolificinteractive.materialcalendarview.CalendarDay
+import com.prolificinteractive.materialcalendarview.MaterialCalendarView
+import com.prolificinteractive.materialcalendarview.DayViewDecorator
+import com.prolificinteractive.materialcalendarview.DayViewFacade
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.time.Year
 import java.util.Calendar
 
@@ -27,7 +31,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var db: AppDatabase
     private lateinit var loader: DataLoader
-    private lateinit var calendarView: CalendarView
+    private lateinit var calendarView: MaterialCalendarView
     private lateinit var infoText: TextView
     private lateinit var yearSpinner: Spinner
     private lateinit var monthSpinner: Spinner
@@ -82,74 +86,21 @@ class MainActivity : AppCompatActivity() {
         // Ініціалізація каналу сповіщень
         NotificationHelper.createNotificationChannel(this)
 
+        // Налаштування календаря
+        setupCalendar()
+
         // Початкове оновлення календаря
         updateCalendar()
 
         // Обробник вибору дати
-        calendarView.setOnDateChangeListener { _, year, month, dayOfMonth ->
-            val dateStr = String.format("%04d-%02d-%02d", year, month + 1, dayOfMonth)
-            CoroutineScope(Dispatchers.Main).launch {
-                var info = withContext(Dispatchers.IO) {
-                    db.moonDao().getByDate(dateStr)
-                }
-
-                // If no data found, try to load it
-                if (info == null) {
-                    withContext(Dispatchers.IO) {
-                        loader.loadDataForYear(year)
-                    }
-                    // Query again after loading
-                    info = withContext(Dispatchers.IO) {
-                        db.moonDao().getByDate(dateStr)
-                    }
-                }
-
-                if (info != null) {
-                    val statusText = when (info.status) {
-                        1 -> getString(R.string.favorable_day)
-                        -1 -> getString(R.string.unfavorable_day)
-                        else -> getString(R.string.neutral_day)
-                    }
-                    infoText.text = buildString {
-                        append("${getString(R.string.status)}: $statusText\n")
-                        append("${getString(R.string.phase)}: ${info.phase_name}\n")
-                        append("${getString(R.string.waxing)}: ${if (info.is_waxing) getString(R.string.yes) else getString(R.string.no)}\n")
-                        append("${getString(R.string.lunar_day)}: ${info.lunar_day}\n")
-                        append("${getString(R.string.zodiac_sign)}: ${info.zodiac_sign}")
-                    }
-                } else {
-                    infoText.text = getString(R.string.data_not_loaded, dateStr)
-                }
-            }
+        calendarView.setOnDateChangedListener { _, date, _ ->
+            val selectedDate = LocalDate.of(date.year, date.month + 1, date.day)
+            showDayInfo(selectedDate)
         }
     }
 
     private fun setupSpinners() {
-        // Роки: наприклад від 2020 до 2035
-        val years = (2020..2035).toList()
-        yearSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, years)
-        yearSpinner.setSelection(years.indexOf(Year.now().value))
-
-        // Місяці: 01–12
-        val months = (1..12).map { it.toString().padStart(2, '0') }
-        monthSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, months)
-        monthSpinner.setSelection(LocalDate.now().monthValue - 1)
-
-        val listener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(
-                parent: AdapterView<*>?,
-                view: View?,
-                position: Int,
-                id: Long
-            ) {
-                updateCalendar()
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
-        }
-
-        yearSpinner.onItemSelectedListener = listener
-        monthSpinner.onItemSelectedListener = listener
+        TODO("Not yet implemented")
     }
 
     private fun updateCalendar() {
@@ -159,6 +110,95 @@ class MainActivity : AppCompatActivity() {
         CoroutineScope(Dispatchers.Main).launch {
             withContext(Dispatchers.IO) {
                 loader.loadDataForYear(selectedYear)
+            }
+
+            // Створюємо декоратори для розмальовування днів
+            val favorableDays = mutableListOf<CalendarDay>()
+            val unfavorableDays = mutableListOf<CalendarDay>()
+
+            // Отримуємо всі дні місяця і перевіряємо їх статус
+            val calendar = Calendar.getInstance()
+            calendar.set(selectedYear, selectedMonth - 1, 1)
+            val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+
+            for (day in 1..daysInMonth) {
+                val date = LocalDate.of(selectedYear, selectedMonth, day)
+                val dateStr = date.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+
+                val moonInfo = withContext(Dispatchers.IO) {
+                    db.moonDao().getByDate(dateStr)
+                }
+
+                val calendarDay = CalendarDay.from(selectedYear, selectedMonth - 1, day)
+                when (moonInfo?.status) {
+                    1 -> favorableDays.add(calendarDay)
+                    -1 -> unfavorableDays.add(calendarDay)
+                }
+            }
+
+            // Очищаємо попередні декоратори
+            calendarView.removeDecorators()
+
+            // Додаємо нові декоратори
+            if (favorableDays.isNotEmpty()) {
+                calendarView.addDecorator(FavorableDayDecorator(favorableDays))
+            }
+            if (unfavorableDays.isNotEmpty()) {
+                calendarView.addDecorator(UnfavorableDayDecorator(unfavorableDays))
+            }
+
+            // Встановлюємо дату календаря
+            calendarView.setCurrentDate(CalendarDay.from(selectedYear, selectedMonth - 1, 1))
+        }
+    }
+
+    private fun setupCalendar() {
+        // Налаштування календаря - встановлюємо поточну дату
+        val calendar = Calendar.getInstance()
+        calendarView.setCurrentDate(calendar)
+    }
+
+    private fun showDayInfo(date: LocalDate) {
+        val dateStr = date.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+        println("MainActivity: Date selected: $dateStr")
+        CoroutineScope(Dispatchers.Main).launch {
+            var info = withContext(Dispatchers.IO) {
+                val result = db.moonDao().getByDate(dateStr)
+                println("MainActivity: Data from DB for $dateStr: $result")
+                result
+            }
+
+            // If no data found, try to load it
+            if (info == null) {
+                println("MainActivity: No data found, loading data for $dateStr")
+                withContext(Dispatchers.IO) {
+                    loader.loadDataForDate(date)
+                }
+                // Query again after loading
+                info = withContext(Dispatchers.IO) {
+                    val result = db.moonDao().getByDate(dateStr)
+                    println("MainActivity: Data after loading for $dateStr: $result")
+                    result
+                }
+            }
+
+            if (info != null) {
+                val statusText = when (info.status) {
+                    1 -> getString(R.string.favorable_day)
+                    -1 -> getString(R.string.unfavorable_day)
+                    else -> getString(R.string.neutral_day)
+                }
+                infoText.text = buildString {
+                    append("${getString(R.string.status)}: $statusText\n")
+                    append("${getString(R.string.phase)}: ${info.phase_name}\n")
+                    append("${getString(R.string.waxing)}: ${if (info.is_waxing) getString(R.string.yes) else getString(R.string.no)}\n")
+                    append("${getString(R.string.lunar_day)}: ${info.lunar_day}\n")
+                    append("${getString(R.string.zodiac_sign)}: ${info.zodiac_sign}")
+                }
+                println("MainActivity: Displayed data for $dateStr")
+            } else {
+                infoText.text = getString(R.string.data_not_loaded, dateStr)
+                println("MainActivity: No data available for $dateStr")
             }
         }
     }
@@ -173,5 +213,29 @@ class MainActivity : AppCompatActivity() {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
+    }
+}
+
+// Декоратор для позитивних днів (зелений колір)
+class FavorableDayDecorator(private val dates: List<CalendarDay>) : DayViewDecorator {
+    override fun shouldDecorate(day: CalendarDay): Boolean {
+        return dates.contains(day)
+    }
+
+    override fun decorate(view: DayViewFacade) {
+        view.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.parseColor("#4CAF50")))
+        view.setDaysDisabled(false)
+    }
+}
+
+// Декоратор для негативних днів (червоний колір)
+class UnfavorableDayDecorator(private val dates: List<CalendarDay>) : DayViewDecorator {
+    override fun shouldDecorate(day: CalendarDay): Boolean {
+        return dates.contains(day)
+    }
+
+    override fun decorate(view: DayViewFacade) {
+        view.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.parseColor("#F44336")))
+        view.setDaysDisabled(false)
     }
 }

@@ -7,6 +7,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import kotlin.math.cos
 
 class DataLoader(private val dao: MoonDao) {
     private val api: MoonApiService
@@ -19,57 +20,131 @@ class DataLoader(private val dao: MoonDao) {
         api = retrofit.create(MoonApiService::class.java)
     }
 
-    suspend fun loadDataForYear(year: Int) = withContext(Dispatchers.IO) {  // без apiKey
+    suspend fun loadDataForYear(year: Int) = withContext(Dispatchers.IO) {
         val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
         var date = LocalDate.of(year, 1, 1)
         val endDate = LocalDate.of(year, 12, 31)
 
         while (!date.isAfter(endDate)) {
-            val dateStr = date.format(formatter)
-            if (dao.getByDate(dateStr) == null) {
-                try {
-                    val phaseCall = api.getMoonPhase(dateStr)
-                    val positionCall = api.getMoonPosition(dateStr)
-
-                    val phaseResponse = phaseCall.execute().body()
-                    val positionResponse = positionCall.execute().body()
-
-                    if (phaseResponse != null && positionResponse != null) {
-                        val lunarAge = calculateLunarAge(phaseResponse.closestphase?.date)  // вік від New Moon
-                        val lunarDay = (lunarAge.toInt() + 1).coerceIn(1, 30)
-
-                        val zodiacSign = calculateZodiacSign(positionResponse.moondata?.firstOrNull()?.eclipticlon ?: 0.0)
-
-                        val isWaxing = phaseResponse.curphase?.contains("Waxing") ?: false
-
-                        val illumination = phaseResponse.fracillum?.replace("%", "")?.toDoubleOrNull() ?: 0.0
-
-                        val status = calculateStatus(
-                            phaseResponse.curphase ?: "",
-                            isWaxing,
-                            lunarDay,
-                            zodiacSign,
-                            date.dayOfWeek.value
-                        )
-
-                        val info = MoonInfo(
-                            dateStr,
-                            phaseResponse.curphase ?: "",
-                            isWaxing,
-                            illumination,
-                            lunarDay,
-                            zodiacSign,
-                            status
-                        )
-
-                        dao.insert(info)
-                    }
-                } catch (e: Exception) {
-                    // Лог помилок
-                }
-            }
+            loadDataForDate(date)
             date = date.plusDays(1)
         }
+    }
+
+    suspend fun loadDataForDate(date: LocalDate) {
+        val dateStr = date.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+
+        if (dao.getByDate(dateStr) == null) {
+            try {
+                println("DataLoader: Calculating moon data for $dateStr")
+
+                // Calculate moon data using astronomical formulas
+                val moonData = calculateMoonData(date)
+
+                val status = calculateStatus(
+                    moonData.phaseName,
+                    moonData.isWaxing,
+                    moonData.lunarDay,
+                    moonData.zodiacSign,
+                    date.dayOfWeek.value
+                )
+
+                val info = MoonInfo(
+                    dateStr,
+                    moonData.phaseName,
+                    moonData.isWaxing,
+                    moonData.illumination,
+                    moonData.lunarDay,
+                    moonData.zodiacSign,
+                    status
+                )
+
+                dao.insert(info)
+                println("DataLoader: Successfully calculated and inserted data for $dateStr")
+
+            } catch (e: Exception) {
+                println("DataLoader: Exception calculating data for $dateStr: ${e.message}")
+                e.printStackTrace()
+            }
+        } else {
+            println("DataLoader: Data already exists for $dateStr")
+        }
+    }
+
+    private data class CalculatedMoonData(
+        val phaseName: String,
+        val isWaxing: Boolean,
+        val illumination: Double,
+        val lunarDay: Int,
+        val zodiacSign: String
+    )
+
+    private fun calculateMoonData(date: LocalDate): CalculatedMoonData {
+        // Calculate Julian Day
+        val a = (14 - date.monthValue) / 12
+        val y = date.year + 4800 - a
+        val m = date.monthValue + 12 * a - 3
+        val julianDay = date.dayOfMonth + (153 * m + 2) / 5 + 365 * y + y / 4 - y / 100 + y / 400 - 32045
+
+        // Reference: January 1, 2000, 12:00 UT
+        val jd2000 = 2451545.0
+        val daysSince2000 = julianDay - jd2000
+
+        // Moon's mean longitude
+        val moonMeanLongitude = (218.3164477 + 13.176396464 * daysSince2000) % 360
+
+        // Moon's mean anomaly
+        val moonMeanAnomaly = (134.9633964 + 13.064992950 * daysSince2000) % 360
+
+        // Sun's mean anomaly
+        val sunMeanAnomaly = (357.5291092 + 0.985600281 * daysSince2000) % 360
+
+        // Moon's phase angle
+        val phaseAngle = moonMeanLongitude - sunMeanAnomaly
+
+        // Moon's illuminated fraction (simplified)
+        val illumination = (1 + cos(Math.toRadians(phaseAngle))) / 2
+
+        // Determine moon phase
+        val phaseDegrees = (phaseAngle % 360 + 360) % 360
+        val phaseName = when {
+            phaseDegrees < 22.5 -> "New Moon"
+            phaseDegrees < 67.5 -> "Waxing Crescent"
+            phaseDegrees < 112.5 -> "First Quarter"
+            phaseDegrees < 157.5 -> "Waxing Gibbous"
+            phaseDegrees < 202.5 -> "Full Moon"
+            phaseDegrees < 247.5 -> "Waning Gibbous"
+            phaseDegrees < 292.5 -> "Last Quarter"
+            phaseDegrees < 337.5 -> "Waning Crescent"
+            else -> "New Moon"
+        }
+
+        val isWaxing = phaseName.contains("Waxing") || phaseName == "New Moon"
+
+        // Calculate lunar day (simplified - actual calculation is more complex)
+        val lunarCycleDays = 29.530588
+        val newMoonJd = 2451549.0 // Approximate JD for new moon near 2000
+        val daysSinceNewMoon = (julianDay - newMoonJd) % lunarCycleDays
+        val lunarDay = (daysSinceNewMoon.toInt() + 1).coerceIn(1, 30)
+
+        // Calculate zodiac sign based on moon's ecliptic longitude (simplified)
+        val zodiacSign = when ((moonMeanLongitude % 360).toInt()) {
+            in 0..29 -> "Aries"
+            in 30..59 -> "Taurus"
+            in 60..89 -> "Gemini"
+            in 90..119 -> "Cancer"
+            in 120..149 -> "Leo"
+            in 150..179 -> "Virgo"
+            in 180..209 -> "Libra"
+            in 210..239 -> "Scorpio"
+            in 240..269 -> "Sagittarius"
+            in 270..299 -> "Capricorn"
+            in 300..329 -> "Aquarius"
+            in 330..359 -> "Pisces"
+            else -> "Unknown"
+        }
+
+        return CalculatedMoonData(phaseName, isWaxing, illumination, lunarDay, zodiacSign)
     }
 
     private fun calculateLunarAge(newMoonDate: String?): Double {
@@ -96,16 +171,13 @@ class DataLoader(private val dao: MoonDao) {
         }
     }
 
-
-
     private fun calculateStatus(
         phaseName: String,
         isWaxing: Boolean,
-        lunarDay: Int,          // змінив на Int, бо lunarDay — це число
+        lunarDay: Int,
         zodiacSign: String,
         weekday: Int
     ): Int {
-        // Ваш попередній код розрахунку score
         val favorableSigns = setOf("Leo", "Virgo", "Taurus", "Capricorn", "Libra")
         val unfavorableSigns = setOf("Cancer", "Pisces", "Scorpio", "Aries", "Aquarius")
         val favorableLunarDays = setOf(5,6,8,11,13,14,19,21,22,27,28)
@@ -113,103 +185,32 @@ class DataLoader(private val dao: MoonDao) {
 
         val signScore = when {
             favorableSigns.contains(zodiacSign) -> 2
-            unfavorableSigns.contains(zodiacSign) -> -2
-            else -> 0
+            unfavorableSigns.contains(zodiacSign) -> -1
+            else -> 1
         }
 
         val phaseScore = when {
-            phaseName.contains("New", ignoreCase = true) || phaseName.contains("Full", ignoreCase = true) -> -2
+            phaseName.contains("New", ignoreCase = true) || phaseName.contains("Full", ignoreCase = true) -> -1
             isWaxing -> 1
             else -> 0
         }
 
         val lunarScore = when {
-            satanicDays.contains(lunarDay) -> -3
-            !favorableLunarDays.contains(lunarDay) -> -1
+            satanicDays.contains(lunarDay) -> -2
             favorableLunarDays.contains(lunarDay) -> 2
             else -> 0
         }
 
-        val weekdayScore = if (weekday == 7) -2 else if (weekday == 4 || weekday == 6) 1 else 0
+        val weekdayScore = if (weekday == 7) -1 else if (weekday == 4 || weekday == 6) 1 else 0
 
         val totalScore = signScore + phaseScore + lunarScore + weekdayScore
 
+        println("Status calculation for $zodiacSign, $phaseName, day $lunarDay, weekday $weekday: sign=$signScore, phase=$phaseScore, lunar=$lunarScore, weekday=$weekdayScore, total=$totalScore")
+
         return when {
-            totalScore >= 3 -> 1
+            totalScore >= 2 -> 1  // Зменшив поріг для позитивних днів
             totalScore <= -2 -> -1
             else -> 0
         }
     }
-
-    private fun convertUsnoData(usnoData: MoonPhaseResponse, date: LocalDate): com.kib.trimmoon.MoonData {
-        // Якщо структура відповіді USNO інша — адаптуйте поля відповідно
-        val curphase = usnoData.curphase ?: "Unknown"
-        val fracillumStr = usnoData.fracillum ?: "0%"
-
-        // Конвертуємо відсоток освітлення з рядка у число
-        val illuminationPercent = fracillumStr.removeSuffix("%").toDoubleOrNull() ?: 0.0
-        val illumination = illuminationPercent / 100.0
-
-        // Визначаємо, чи місяць росте чи спадає на основі фази
-        val isWaxing = when (curphase.lowercase()) {
-            "new moon" -> true
-            "waxing crescent" -> true
-            "first quarter" -> true
-            "waxing gibbous" -> true
-            "full moon" -> false
-            "waning gibbous" -> false
-            "last quarter" -> false
-            "waning crescent" -> false
-            else -> true  // fallback
-        }
-
-        // Орієнтовний lunar_age на основі фази (можна покращити з closestphase)
-        val lunarAge = when (curphase.lowercase()) {
-            "new moon" -> 0.0
-            "waxing crescent" -> 3.0
-            "first quarter" -> 7.5
-            "waxing gibbous" -> 12.0
-            "full moon" -> 14.5
-            "waning gibbous" -> 17.0
-            "last quarter" -> 22.0
-            "waning crescent" -> 26.0
-            else -> 7.0  // середнє
-        }
-
-        // Знак зодіаку — якщо у вас є MoonPositionResponse, візьміть eclipticlon
-        // Якщо тільки MoonPhaseResponse — використовуйте наближення або окремий запит
-        val zodiacSign = getZodiacSign(date)  // ваша функція
-
-        return com.kib.trimmoon.MoonData(
-            phase_name = curphase,
-            is_waxing = isWaxing,
-            illumination = illumination,
-            lunar_age = lunarAge,
-            zodiac_sign = zodiacSign
-        )
-    }
-
-    private fun getZodiacSign(date: LocalDate): String {
-        val day = date.dayOfMonth
-        val month = date.monthValue
-
-        return when {
-            (month == 1 && day >= 20) || (month == 2 && day <= 18) -> "Aquarius"
-            (month == 2 && day >= 19) || (month == 3 && day <= 20) -> "Pisces"
-            (month == 3 && day >= 21) || (month == 4 && day <= 19) -> "Aries"
-            (month == 4 && day >= 20) || (month == 5 && day <= 20) -> "Taurus"
-            (month == 5 && day >= 21) || (month == 6 && day <= 20) -> "Gemini"
-            (month == 6 && day >= 21) || (month == 7 && day <= 22) -> "Cancer"
-            (month == 7 && day >= 23) || (month == 8 && day <= 22) -> "Leo"
-            (month == 8 && day >= 23) || (month == 9 && day <= 22) -> "Virgo"
-            (month == 9 && day >= 23) || (month == 10 && day <= 22) -> "Libra"
-            (month == 10 && day >= 23) || (month == 11 && day <= 21) -> "Scorpio"
-            (month == 11 && day >= 22) || (month == 12 && day <= 21) -> "Sagittarius"
-            (month == 12 && day >= 22) || (month == 1 && day <= 19) -> "Capricorn"
-            else -> "Unknown"
-        }
-    }
 }
-
-
-
