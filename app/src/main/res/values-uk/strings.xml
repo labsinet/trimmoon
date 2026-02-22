@@ -3,7 +3,7 @@
     <string name="app_name">Дні для стрижки</string>
 
     <!-- UI elements -->
-    <string name="select_date">Оберіть дату</string>
+    <string name="select_date">Оберіть дату:</string>
     <string name="favorable_day">Позитивний день для стрижки</string>
     <string name="unfavorable_day">Негативний день для стрижки</string>
     <string name="neutral_day">Нейтральний день</string>
