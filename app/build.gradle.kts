@@ -1,11 +1,7 @@
 plugins {
     id("com.android.application")
-    // Версія Kotlin має бути у файлі build.gradle.kts (root project)
     id("com.google.devtools.ksp") version "2.0.20-1.0.24"
-}
-
-ksp {
-    arg("room.incremental", "true")
+    // Версія Kotlin має бути у файлі build.gradle.kts (root project)
 }
 
 android {
@@ -42,7 +38,7 @@ android {
     }
 
     buildFeatures {
-        viewBinding = true
+        // viewBinding = true
     }
 
 
@@ -56,7 +52,7 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
     // Room
-    val roomVersion = "2.7.0"
+    val roomVersion = "2.5.2"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
@@ -68,5 +64,5 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     //implementation(libs.material.calendarview)
-    implementation("com.github.prolificinteractive:material-calendarview:2.0.1")
+    // implementation("com.kizitonwose.calendar:view:2.4.0")
  }
