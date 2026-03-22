@@ -1,5 +1,6 @@
 package com.kib.trimmoon
 
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.Retrofit
@@ -80,55 +81,50 @@ class DataLoader(private val dao: MoonDao) {
     )
 
     private fun calculateMoonData(date: LocalDate): CalculatedMoonData {
-        // Calculate Julian Day
         val a = (14 - date.monthValue) / 12
         val y = date.year + 4800 - a
         val m = date.monthValue + 12 * a - 3
         val julianDay = date.dayOfMonth + (153 * m + 2) / 5 + 365 * y + y / 4 - y / 100 + y / 400 - 32045
+        val d = julianDay - 2451545.0
 
-        // Reference: January 1, 2000, 12:00 UT
-        val jd2000 = 2451545.0
-        val daysSince2000 = julianDay - jd2000
+        // 1. Сонце (середня аномалія та довгота)
+        val sunMeanAnomaly = (357.529 + 0.98560028 * d) % 360
+        val sunMeanLongitude = (280.459 + 0.98564736 * d) % 360
 
-        // Moon's mean longitude
-        val moonMeanLongitude = (218.3164477 + 13.176396464 * daysSince2000) % 360
+        // 2. Місяць (середня довгота та аномалія)
+        val moonMeanLongitude = (218.316 + 13.176396 * d) % 360
+        val moonMeanAnomaly = (134.963 + 13.064993 * d) % 360
 
-        // Moon's mean anomaly
-        val moonMeanAnomaly = (134.9633964 + 13.064992950 * daysSince2000) % 360
+        // --- КОРЕКЦІЯ (Рівняння центру) ---
+        // Додаємо хоча б основну гармоніку, щоб Знак Зодіаку не "втікав"
+        val moonCorrectedLongitude = moonMeanLongitude + 6.289 * Math.sin(Math.toRadians(moonMeanAnomaly))
 
-        // Sun's mean anomaly
-        val sunMeanAnomaly = (357.5291092 + 0.985600281 * daysSince2000) % 360
+        // 3. Елонгація (Кут фази)
+        val elongation = (moonCorrectedLongitude - sunMeanLongitude + 360) % 360
 
-        // Moon's phase angle
-        val phaseAngle = moonMeanLongitude - sunMeanAnomaly
+        val isWaxing = elongation < 180
+        val illumination = (1 + cos(Math.toRadians(elongation - 180))) / 2
 
-        // Moon's illuminated fraction (simplified)
-        val illumination = (1 + cos(Math.toRadians(phaseAngle))) / 2
-
-        // Determine moon phase
-        val phaseDegrees = (phaseAngle % 360 + 360) % 360
+        // Фаза
         val phaseName = when {
-            phaseDegrees < 22.5 -> "New Moon"
-            phaseDegrees < 67.5 -> "Waxing Crescent"
-            phaseDegrees < 112.5 -> "First Quarter"
-            phaseDegrees < 157.5 -> "Waxing Gibbous"
-            phaseDegrees < 202.5 -> "Full Moon"
-            phaseDegrees < 247.5 -> "Waning Gibbous"
-            phaseDegrees < 292.5 -> "Last Quarter"
-            phaseDegrees < 337.5 -> "Waning Crescent"
-            else -> "New Moon"
+            elongation < 15 || elongation > 345 -> "New Moon"
+            elongation < 75 -> "Waxing Crescent"
+            elongation < 105 -> "First Quarter"
+            elongation < 165 -> "Waxing Gibbous"
+            elongation < 195 -> "Full Moon"
+            elongation < 255 -> "Waning Gibbous"
+            elongation < 285 -> "Last Quarter"
+            else -> "Waning Crescent"
         }
 
-        val isWaxing = phaseName.contains("Waxing") || phaseName == "New Moon"
-
-        // Calculate lunar day (simplified - actual calculation is more complex)
-        val lunarCycleDays = 29.530588
-        val newMoonJd = 2451549.0 // Approximate JD for new moon near 2000
-        val daysSinceNewMoon = (julianDay - newMoonJd) % lunarCycleDays
+        // 4. Місячний день (синхронізація з календарем)
+        val knownNewMoon = 2451550.1
+        var daysSinceNewMoon = (julianDay - knownNewMoon) % 29.530588
+        if (daysSinceNewMoon < 0) daysSinceNewMoon += 29.530588
         val lunarDay = (daysSinceNewMoon.toInt() + 1).coerceIn(1, 30)
 
-        // Calculate zodiac sign based on moon's ecliptic longitude (simplified)
-        val zodiacSign = when ((moonMeanLongitude % 360).toInt()) {
+        // 5. Знак Зодіаку (використовуємо скориговану довготу)
+        val zodiacSign = when (((moonCorrectedLongitude + 360) % 360).toInt()) {
             in 0..29 -> "Aries"
             in 30..59 -> "Taurus"
             in 60..89 -> "Gemini"
@@ -140,35 +136,10 @@ class DataLoader(private val dao: MoonDao) {
             in 240..269 -> "Sagittarius"
             in 270..299 -> "Capricorn"
             in 300..329 -> "Aquarius"
-            in 330..359 -> "Pisces"
-            else -> "Unknown"
-        }
-
-        return CalculatedMoonData(phaseName, isWaxing, illumination, lunarDay, zodiacSign)
-    }
-
-    private fun calculateLunarAge(newMoonDate: String?): Double {
-        if (newMoonDate.isNullOrEmpty()) return 0.0
-        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-        val newMoon = LocalDate.parse(newMoonDate, formatter)
-        return ChronoUnit.DAYS.between(newMoon, LocalDate.now()).toDouble()
-    }
-
-    private fun calculateZodiacSign(eclipticLon: Double): String {
-        return when {
-            eclipticLon < 30 -> "Aries"
-            eclipticLon < 60 -> "Taurus"
-            eclipticLon < 90 -> "Gemini"
-            eclipticLon < 120 -> "Cancer"
-            eclipticLon < 150 -> "Leo"
-            eclipticLon < 180 -> "Virgo"
-            eclipticLon < 210 -> "Libra"
-            eclipticLon < 240 -> "Scorpio"
-            eclipticLon < 270 -> "Sagittarius"
-            eclipticLon < 300 -> "Capricorn"
-            eclipticLon < 330 -> "Aquarius"
             else -> "Pisces"
         }
+      //  Log.d("ZodiacCheck", "$date -> $zodiacSign")
+        return CalculatedMoonData(phaseName, isWaxing, illumination, lunarDay, zodiacSign)
     }
 
     private fun calculateStatus(
@@ -178,39 +149,40 @@ class DataLoader(private val dao: MoonDao) {
         zodiacSign: String,
         weekday: Int
     ): Int {
-        val favorableSigns = setOf("Leo", "Virgo", "Taurus", "Capricorn", "Libra")
-        val unfavorableSigns = setOf("Cancer", "Pisces", "Scorpio", "Aries", "Aquarius")
-        val favorableLunarDays = setOf(5,6,8,11,13,14,19,21,22,27,28)
-        val satanicDays = setOf(9,15,23,29)
+        // Вронський ставить Знак на перше місце
+        val bestSigns = setOf("Leo", "Virgo")
+        val goodSigns = setOf("Taurus", "Capricorn", "Libra")
+        val badSigns = setOf("Cancer", "Pisces", "Scorpio")
+        val neutralSigns = setOf("Gemini", "Sagittarius", "Aquarius")
 
-        val signScore = when {
-            favorableSigns.contains(zodiacSign) -> 2
-            unfavorableSigns.contains(zodiacSign) -> -1
-            else -> 1
-        }
+        val favorableDays = setOf(5, 8, 11, 13, 14, 19, 21, 22, 26, 27, 28)
+        val dangerousDays = setOf(9, 15, 23, 29)
 
-        val phaseScore = when {
-            phaseName.contains("New", ignoreCase = true) || phaseName.contains("Full", ignoreCase = true) -> -1
-            isWaxing -> 1
-            else -> 0
-        }
+        var score = 0
 
-        val lunarScore = when {
-            satanicDays.contains(lunarDay) -> -2
-            favorableLunarDays.contains(lunarDay) -> 2
-            else -> 0
-        }
+        // Нарахування балів (максимально лояльне)
+        if (bestSigns.contains(zodiacSign)) score += 4
+        else if (goodSigns.contains(zodiacSign)) score += 3
+        else if (badSigns.contains(zodiacSign)) score -= 2
 
-        val weekdayScore = if (weekday == 7) -1 else if (weekday == 4 || weekday == 6) 1 else 0
+        if (favorableDays.contains(lunarDay)) score += 2
+        if (dangerousDays.contains(lunarDay)) score -= 2
+        if (neutralSigns.contains(zodiacSign)) score += 1
 
-        val totalScore = signScore + phaseScore + lunarScore + weekdayScore
+        if (isWaxing) score += 1
+        if (phaseName == "Full Moon") score += 1 // Повня - це "зарядка" волосся
 
-        println("Status calculation for $zodiacSign, $phaseName, day $lunarDay, weekday $weekday: sign=$signScore, phase=$phaseScore, lunar=$lunarScore, weekday=$weekdayScore, total=$totalScore")
+        if (weekday == 7) score -= 2 // Неділя - однозначне "ні"
+        if (weekday == 4 || weekday == 6) score += 1
 
+        // Повертаємо 1 (позитивний), якщо набрано хоча б 3 бали
+        // Тепер це реально: (Знак +2) + (День +2) - (Зменшення за щось інше) = 3+
+        Log.d("ZodiacCheck", "$score -> $zodiacSign")
         return when {
-            totalScore >= 2 -> 1  // Зменшив поріг для позитивних днів
-            totalScore <= -2 -> -1
+            score >= 2 -> 1
+            score <= -2 -> -1
             else -> 0
         }
     }
+
 }
