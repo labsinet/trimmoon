@@ -11,6 +11,8 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Spinner
 import android.widget.TextView
+import android.widget.Toast
+import android.widget.Toast.makeText
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
@@ -50,47 +52,54 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        try {
+            setContentView(R.layout.activity_main)
 
-        calendarView = findViewById(R.id.calendarView)
-        infoText = findViewById(R.id.infoText)
-        yearSpinner = findViewById(R.id.yearSpinner)
-        monthSpinner = findViewById(R.id.monthSpinner)
-        switchReminders = findViewById(R.id.switchReminders)
+            calendarView = findViewById(R.id.calendarView)
+            infoText = findViewById(R.id.infoText)
+            yearSpinner = findViewById(R.id.yearSpinner)
+            monthSpinner = findViewById(R.id.monthSpinner)
+            switchReminders = findViewById(R.id.switchReminders)
 
-        db = AppDatabase.getDatabase(this)
-        loader = DataLoader(db.moonDao())
+            db = AppDatabase.getDatabase(this)
+            loader = DataLoader(db.moonDao())
 
-        setupSpinners()
+            setupSpinners()
 
-        val prefs = getSharedPreferences("trimmoon_prefs", MODE_PRIVATE)
-        val remindersEnabled = prefs.getBoolean("reminders_enabled", false)
-        switchReminders.isChecked = remindersEnabled
+            val prefs = getSharedPreferences("trimmoon_prefs", MODE_PRIVATE)
+            val remindersEnabled = prefs.getBoolean("reminders_enabled", false)
+            switchReminders.isChecked = remindersEnabled
 
-        switchReminders.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().putBoolean("reminders_enabled", isChecked).apply()
-            if (isChecked) {
-                requestNotificationPermissionIfNeeded()
-                ReminderManager.scheduleDailyReminder(this)
-            } else {
-                ReminderManager.cancelDailyReminder(this)
+            switchReminders.setOnCheckedChangeListener { _, isChecked ->
+                prefs.edit().putBoolean("reminders_enabled", isChecked).apply()
+                if (isChecked) {
+                    requestNotificationPermissionIfNeeded()
+                    ReminderManager.scheduleDailyReminder(this)
+                } else {
+                    ReminderManager.cancelDailyReminder(this)
+                }
             }
-        }
 
-        if (remindersEnabled) {
-            ReminderManager.scheduleDailyReminder(this)
-        }
+            if (remindersEnabled) {
+                ReminderManager.scheduleDailyReminder(this)
+            }
 
-        NotificationHelper.createNotificationChannel(this)
+            NotificationHelper.createNotificationChannel(this)
 
-        setupCalendar()
-        updateCalendar()
+            setupCalendar()
+            updateCalendar()
 
-        calendarView.setOnDateChangedListener { _, date, selected ->
-            if (!selected || date == null) return@setOnDateChangedListener
+            calendarView.setOnDateChangedListener { _, date, selected ->
+                if (!selected || date == null) return@setOnDateChangedListener
 
-            val selectedDate = LocalDate.of(date.year, date.month + 1, date.day)
-            showDayInfo(selectedDate)
+                val selectedDate = LocalDate.of(date.year, date.month + 1, date.day)
+                showDayInfo(selectedDate)
+            }
+        } catch (e: Throwable) {
+            Log.e("MainCrash", "Краш на запуску", e)
+            makeText(this, "Помилка: ${e.message}", Toast.LENGTH_LONG).show()
+            e.printStackTrace()
+            throw e  // щоб побачити стек-трейс
         }
     }
 
@@ -142,20 +151,20 @@ class MainActivity : AppCompatActivity() {
             val favorableDays = mutableSetOf<CalendarDay>()
             val unfavorableDays = mutableSetOf<CalendarDay>()
 
-            val calendar = Calendar.getInstance().apply {
-                set(selectedYear, selectedMonth - 1, 1)
-            }
-            val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+            // Початок місяця
+            val firstDayOfMonth = LocalDate.of(selectedYear, selectedMonth, 1)
+            val daysInMonth = firstDayOfMonth.lengthOfMonth()  // правильно враховує високосність!
 
-            for (day in 1..daysInMonth) {
-                val date = LocalDate.of(selectedYear, selectedMonth, day)
+            for (dayOfMonth in 1..daysInMonth) {
+                val date = firstDayOfMonth.withDayOfMonth(dayOfMonth)
                 val dateStr = date.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
 
                 val moonInfo = withContext(Dispatchers.IO) {
                     db.moonDao().getByDate(dateStr)
                 }
 
-                val calendarDay = CalendarDay.from(selectedYear, selectedMonth - 1, day)
+                // CalendarDay.from приймає рік, місяць (1-12), день (1-31)
+                val calendarDay = CalendarDay.from(selectedYear, selectedMonth, dayOfMonth)
 
                 when (moonInfo?.status) {
                     1 -> favorableDays.add(calendarDay)
@@ -172,9 +181,57 @@ class MainActivity : AppCompatActivity() {
                 calendarView.addDecorator(UnfavorableDayDecorator(unfavorableDays.toList()))
             }
 
-            calendarView.setCurrentDate(CalendarDay.from(selectedYear, selectedMonth - 1, 1))
+            // Встановлюємо поточну дату календаря
+            calendarView.setCurrentDate(CalendarDay.from(firstDayOfMonth.year, firstDayOfMonth.monthValue, 1))
         }
-    }
+        }
+//        val selectedYearStr = yearSpinner.selectedItem as? String ?: return
+//        val selectedMonthStr = monthSpinner.selectedItem as? String ?: return
+//
+//        val selectedYear = selectedYearStr.toIntOrNull() ?: return
+//        val selectedMonth = selectedMonthStr.toIntOrNull() ?: return
+//
+//        CoroutineScope(Dispatchers.Main).launch {
+//            withContext(Dispatchers.IO) {
+//                loader.loadDataForYear(selectedYear)
+//            }
+//
+//            val favorableDays = mutableSetOf<CalendarDay>()
+//            val unfavorableDays = mutableSetOf<CalendarDay>()
+//
+//            val calendar = Calendar.getInstance().apply {
+//                set(selectedYear, selectedMonth - 1, 1)
+//            }
+//            val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+//
+//            for (day in 1..daysInMonth) {
+//                val date = LocalDate.of(selectedYear, selectedMonth, day)
+//                val dateStr = date.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+//
+//                val moonInfo = withContext(Dispatchers.IO) {
+//                    db.moonDao().getByDate(dateStr)
+//                }
+//
+//                val calendarDay = CalendarDay.from(selectedYear, selectedMonth - 1, day)
+//
+//                when (moonInfo?.status) {
+//                    1 -> favorableDays.add(calendarDay)
+//                    -1 -> unfavorableDays.add(calendarDay)
+//                }
+//            }
+//
+//            calendarView.removeDecorators()
+//
+//            if (favorableDays.isNotEmpty()) {
+//                calendarView.addDecorator(FavorableDayDecorator(favorableDays.toList()))
+//            }
+//            if (unfavorableDays.isNotEmpty()) {
+//                calendarView.addDecorator(UnfavorableDayDecorator(unfavorableDays.toList()))
+//            }
+//
+//            calendarView.setCurrentDate(CalendarDay.from(selectedYear, selectedMonth - 1, 1))
+//        }
+
 
     private fun showDayInfo(date: LocalDate) {
         val dateStr = date.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
