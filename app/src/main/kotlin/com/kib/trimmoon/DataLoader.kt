@@ -185,4 +185,44 @@ class DataLoader(private val dao: MoonDao) {
         }
     }
 
+    private fun evaluateDay(
+    phaseName: String,
+    isWaxing: Boolean,
+    lunarDay: Int,
+    zodiacSign: String,
+    weekday: Int
+): DayEvaluation {
+    // Фаза Місяця (max 10 балів)
+    val phaseScore = when {
+        phaseName.contains("New", ignoreCase = true) || phaseName.contains("Full", ignoreCase = true) -> Pair(-4, "Нова/Повня — дуже погано")
+        isWaxing -> Pair(8, "Зростаючий Місяць — добре для росту")
+        else -> Pair(4, "Спадний Місяць — нейтрально/для зміцнення")
+    }
+
+    // Місячний день (max 10 балів)
+    val lunarDayScore = when {
+        lunarDay in 5..6 || lunarDay in 8..14 || lunarDay in 19..22 || lunarDay in 27..28 -> Pair(9, "Сприятливий місячний день")
+        lunarDay in setOf(9, 10, 15, 23, 29) -> Pair(-8, "Сатанинський/важкий день")
+               else -> Pair(2, "Нейтральний або середній день")
+    }
+
+    // Знак Зодіаку (max 10 балів)
+    val zodiacScore = when (zodiacSign) {
+        "Leo", "Virgo", "Taurus", "Capricorn", "Libra" -> Pair(10, "Дуже сприятливий знак")
+        "Cancer", "Pisces", "Scorpio", "Aries", "Aquarius" -> Pair(-8, "Несприятливий знак")
+        else -> Pair(3, "Нейтральний знак")
+    }
+
+    // День тижня (max 10 балів)
+    val weekdayScore = when (weekday) {
+        1 -> Pair(6, "Понеділок — добре для волосся")
+        4 -> Pair(8, "Четвер — дуже сприятливий")
+        6 -> Pair(7, "Субота — добре для зміцнення")
+        7 -> Pair(-10, "Неділя — категорично погано")
+        else -> Pair(4, "Середній день тижня")
+    }
+
+    return DayEvaluation(phaseScore, lunarDayScore, zodiacScore, weekdayScore)
+}
+
 }
